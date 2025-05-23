@@ -243,7 +243,13 @@
             padding: 20px 0;
             margin-bottom: 3rem;
             position: relative;
+            cursor: grab;
+            touch-action: pan-y; /* Allow vertical scroll if not on carousel, but prefer horizontal pan on carousel */
         }
+        .member-carousel-container:active {
+            cursor: grabbing;
+        }
+
         .member-carousel-container::before, .member-carousel-container::after {
             content: '';
             position: absolute;
@@ -265,7 +271,7 @@
         .member-carousel-track {
             display: flex;
             animation: scroll-loop 60s linear infinite;
-            will-change: transform; /* Hint for smoother animation */
+            will-change: transform; 
         }
         @keyframes scroll-loop {
             0% { transform: translateX(0%); }
@@ -281,10 +287,7 @@
             align-items: center;
             position: relative; 
             text-align: center;
-            cursor: default; /* Changed from pointer to default as per original */
-            /* padding-bottom needed if tooltip could overflow container.
-               Given tooltip width is constrained, this might not be strictly needed
-               unless quotes are very long and wrap to many lines. */
+            user-select: none; 
         }
 
         .carousel-image-wrapper {
@@ -309,6 +312,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            pointer-events: none; 
         }
 
         .carousel-member-name {
@@ -321,15 +325,14 @@
             overflow: hidden;
             text-overflow: ellipsis;
             padding: 0 5px;
-            position: relative; /* MODIFIED: Added for tooltip positioning context */
+            position: relative; 
         }
 
         .carousel-member-quote-tooltip {
             position: absolute;
-            /* MODIFIED: Positioned below the name */
             top: 100%; 
             left: 50%;
-            margin-top: 8px; /* Space below the name */
+            margin-top: 8px; 
             
             background-color: rgba(10, 10, 30, 0.95);
             backdrop-filter: blur(8px);
@@ -345,10 +348,9 @@
             max-width: 220px; 
             opacity: 0;
             visibility: hidden;
-            /* MODIFIED: Transform for slide-down effect */
-            transform: translateX(-50%) translateY(-10px); /* Initial state: slightly up */
+            transform: translateX(-50%) translateY(-10px); 
             transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-            z-index: 10; /* z-index can be lower if needed, relative to parent name */
+            z-index: 10; 
             pointer-events: none; 
             white-space: normal;
             word-break: break-word;
@@ -357,8 +359,7 @@
         .member-carousel-item:hover .carousel-member-quote-tooltip {
             opacity: 1;
             visibility: visible;
-            /* MODIFIED: Transform for slide-down effect */
-            transform: translateX(-50%) translateY(0); /* Final state: slid down */
+            transform: translateX(-50%) translateY(0); 
         }
         
         .data-stream {
@@ -374,6 +375,68 @@
             0% { transform: translateY(-100vh); opacity: 0.7;}
             90% { opacity: 0.7; }
             100% { transform: translateY(100vh); opacity: 0;}
+        }
+
+        /* Music Player Styles */
+        #musicPlayer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            background: rgba(10,10,30,0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(86, 142, 255, 0.5);
+            box-shadow: 0 0 20px rgba(66, 153, 225, 0.3);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+        }
+        #musicPlayer .cyber-button { 
+            padding: 6px 10px; 
+            font-size: 0.8rem;
+            margin-right: 10px;
+        }
+        #volumeSliderLabel {
+            font-size: 0.8rem;
+            color: #a0b0dd;
+            margin-right: 5px;
+            font-family: 'Orbitron', sans-serif;
+        }
+        .volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 80px; 
+            height: 6px;
+            background: rgba(86, 142, 255, 0.2); 
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            transition: background 0.1s ease-in-out;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--glow-color-blue); 
+            border-radius: 50%;
+            border: 2px solid #0a0a1a;
+            cursor: pointer;
+            margin-top: -4px; 
+        }
+        .volume-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: var(--glow-color-blue);
+            border-radius: 50%;
+            border: 2px solid #0a0a1a;
+            cursor: pointer;
+        }
+         .volume-slider::-moz-range-track {
+            background: rgba(86, 142, 255, 0.2);
+            border-radius: 3px;
+            height: 6px;
         }
     </style>
 </head>
@@ -429,6 +492,17 @@
         </div>
     </div>
 
+    <div id="musicPlayer">
+        <audio id="backgroundMusic" loop src="music/background.mp3"></audio>
+        <button id="playPauseBtn" class="cyber-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-fill inline-block" viewBox="0 0 16 16">
+                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+            </svg>
+        </button>
+        <label id="volumeSliderLabel" for="volumeSlider">VOL</label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5" class="volume-slider">
+    </div>
+
     <script>
         // =============================
         // MEMBER DATA CONFIGURATION
@@ -456,65 +530,44 @@
         ];
 
         // =============================
+        // GLOBAL VARIABLES FOR CAROUSEL
+        // =============================
+        let carouselTrackElement;
+        let isCarouselDragging = false;
+        let carouselStartX;         
+        let carouselScrollStart;    // Visual translateX at drag start
+        let carouselCurrentLogicalTranslateX; // Accumulated, unwrapped scroll position during drag/inertia
+        let carouselAnimationId;
+        let carouselVelocityX = 0;
+        let carouselLastX;
+        let carouselLastTimestamp;
+        let totalWidthOriginalSet = 0; 
+
+        // =============================
         // HELPER FUNCTIONS
         // =============================
         function parseFilename(fullFilename) {
             const lastDot = fullFilename.lastIndexOf('.');
-            if (lastDot === -1) {
-                console.error(`無效檔名 (沒有副檔名): ${fullFilename}`);
-                return null;
-            }
+            if (lastDot === -1) { console.error(`No extension: ${fullFilename}`); return null; }
             const basename = fullFilename.substring(0, lastDot);
             const firstHyphen = basename.indexOf('-');
-            if (firstHyphen === -1) {
-                console.error(`無效檔名格式 (缺少第一個連字號): ${fullFilename}`);
-                return null;
-            }
+            if (firstHyphen === -1) { console.error(`No first hyphen: ${fullFilename}`); return null; }
             const secondHyphen = basename.indexOf('-', firstHyphen + 1);
-            if (secondHyphen === -1) {
-                console.error(`無效檔名格式 (缺少第二個連字號): ${fullFilename}`);
-                return null;
-            }
-
+            if (secondHyphen === -1) { console.error(`No second hyphen: ${fullFilename}`); return null; }
             const title = basename.substring(0, firstHyphen).trim();
             const name = basename.substring(firstHyphen + 1, secondHyphen).trim();
             const quote = basename.substring(secondHyphen + 1).trim(); 
-            
-            if (!title || !name || !quote) {
-                 console.error(`無效檔名格式 (職稱、姓名或座右銘為空): ${fullFilename}`);
-                return null;
-            }
-
-            return {
-                title: title,
-                name: name,
-                quote: quote,
-                actualFilename: fullFilename 
-            };
+            if (!title || !name || !quote) { console.error(`Empty part: ${fullFilename}`); return null; }
+            return { title, name, quote, actualFilename: fullFilename };
         }
 
         function getCategoryAndRole(titleFromFilename) {
-            let category = 'other'; 
-            let roleDisplay = titleFromFilename; 
-            let badgeColor = 'bg-gray-500';
-
-            roleDisplay = titleFromFilename.replace(/^(113學年度|114學年度)\s*/, '').trim();
-            if (roleDisplay === "") roleDisplay = titleFromFilename;
-
-            if (titleFromFilename.startsWith("113學年度")) {
-                category = "current-cadre";
-                badgeColor = 'bg-blue-600'; 
-            } else if (titleFromFilename.startsWith("114學年度")) {
-                category = "new-cadre";
-                badgeColor = 'bg-green-600'; 
-            } else if (titleFromFilename.toLowerCase().includes("指導老師")) {
-                category = "tech-advisor"; 
-                badgeColor = 'bg-purple-600'; 
-            } else if (titleFromFilename.trim().toLowerCase() === "社員") {
-                category = "general-member";
-                badgeColor = 'bg-teal-500';
-            }
-            
+            let category = 'other', roleDisplay = titleFromFilename, badgeColor = 'bg-gray-500';
+            roleDisplay = titleFromFilename.replace(/^(113學年度|114學年度)\s*/, '').trim() || titleFromFilename;
+            if (titleFromFilename.startsWith("113學年度")) { category = "current-cadre"; badgeColor = 'bg-blue-600'; }
+            else if (titleFromFilename.startsWith("114學年度")) { category = "new-cadre"; badgeColor = 'bg-green-600'; }
+            else if (titleFromFilename.toLowerCase().includes("指導老師")) { category = "tech-advisor"; badgeColor = 'bg-purple-600'; }
+            else if (titleFromFilename.trim().toLowerCase() === "社員") { category = "general-member"; badgeColor = 'bg-teal-500'; }
             return { category, roleDisplay, badgeColor };
         }
 
@@ -523,70 +576,38 @@
         // =============================
         function populateMemberGrid(filenames) {
             const memberGrid = document.getElementById('memberGrid');
-            if (!memberGrid) { 
-                console.error("CRITICAL: memberGrid element not found during populateMemberGrid.");
-                return; 
-            }
+            if (!memberGrid) { console.error("CRITICAL: memberGrid not found."); return; }
             memberGrid.innerHTML = ''; 
-
             if (!Array.isArray(filenames) || filenames.length === 0) {
-                let message = "目前沒有成員資料。";
-                if (Array.isArray(filenames) && filenames.length === 0) {
-                    message += " 請在本 HTML 檔案的 <code><script></code> 區塊中，於 <code>configuredMemberFilenames</code> 陣列內新增成員檔名。";
-                } else {
-                     message += " <code>configuredMemberFilenames</code> 陣列未正確設定。請檢查 HTML 檔案中的 <code><script></code> 區塊。";
-                }
-                memberGrid.innerHTML = `<p class="text-center text-blue-300 col-span-full orbitron py-8">${message}</p>`;
+                memberGrid.innerHTML = `<p class="text-center text-blue-300 col-span-full orbitron py-8">No member data. Add filenames to configuredMemberFilenames.</p>`;
                 return;
             }
-
             filenames.forEach((filename, index) => {
-                if (typeof filename !== 'string' || filename.trim() === '') {
-                    console.warn(`Skipping invalid filename item at index ${index}: ${filename}`);
-                    return;
-                }
-
+                if (typeof filename !== 'string' || filename.trim() === '') { console.warn(`Skipping invalid filename: ${filename}`); return; }
                 const memberData = parseFilename(filename);
-                if (!memberData) {
-                    console.warn(`Skipping unparsable filename: ${filename}`);
-                    return; 
-                }
-
+                if (!memberData) { console.warn(`Skipping unparsable: ${filename}`); return; }
                 const { category, roleDisplay, badgeColor } = getCategoryAndRole(memberData.title);
                 const neonEffectClass = index % 2 === 0 ? 'neon-blue' : 'neon-purple';
-
                 const cardHTML = `
                     <div class="member-card rounded-lg p-4 hologram-effect" data-category="${category}">
                         <div class="relative mb-4">
                             <div class="member-image-container rounded-lg overflow-hidden aspect-square flex items-center justify-center">
                                 <img src="member/${encodeURIComponent(memberData.actualFilename)}" alt="${memberData.name}" class="w-full h-full object-cover" 
-                                     onerror="this.onerror=null; this.parentElement.innerHTML = '<div class=\\'w-full h-full flex items-center justify-center text-red-400 text-sm p-2 text-center font-semibold\\'>圖像載入失敗<br>${memberData.actualFilename}<br>請檢查檔案是否存在於 member 資料夾</div>';">
+                                     onerror="this.onerror=null; this.parentElement.innerHTML = '<div class=\\'w-full h-full flex items-center justify-center text-red-400 text-sm p-2 text-center font-semibold\\'>Image load error<br>${memberData.actualFilename}</div>';">
                             </div>
-                            <div class="absolute -top-2 -right-2 ${badgeColor} text-white text-xs px-2 py-1 rounded-md orbitron shadow-lg transform_gpu">
-                                ${roleDisplay}
-                            </div>
+                            <div class="absolute -top-2 -right-2 ${badgeColor} text-white text-xs px-2 py-1 rounded-md orbitron shadow-lg transform_gpu">${roleDisplay}</div>
                         </div>
                         <div class="text-center">
                             <h3 class="orbitron text-xl font-bold mb-1 ${neonEffectClass}">${memberData.name}</h3>
-                            <p class="member-quote">
-                                "${memberData.quote}"
-                            </p>
+                            <p class="member-quote">"${memberData.quote}"</p>
                         </div>
-                    </div>
-                `;
+                    </div>`;
                 memberGrid.insertAdjacentHTML('beforeend', cardHTML);
             });
-
             const cards = memberGrid.querySelectorAll('.member-card');
             cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(30px) rotateX(-10deg)';
-                
-                setTimeout(() => {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0) rotateX(0deg)';
-                }, index * 100 + 50); 
-                
+                card.style.opacity = '0'; card.style.transform = 'translateY(30px) rotateX(-10deg)';
+                setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0) rotateX(0deg)'; }, index * 100 + 50); 
                 add3DTiltEffect(card);
             });
         }
@@ -595,88 +616,204 @@
         // RENDER MEMBER CAROUSEL
         // =============================
         function populateMemberCarousel(filenames) {
-            const carouselTrack = document.getElementById('memberCarouselTrack');
-            if (!carouselTrack) {
-                console.error("CRITICAL: memberCarouselTrack element not found.");
-                return;
-            }
-            carouselTrack.innerHTML = ''; 
-
-            let itemsHTML = '';
-            let validItemCount = 0;
+            carouselTrackElement = document.getElementById('memberCarouselTrack');
+            if (!carouselTrackElement) { console.error("CRITICAL: memberCarouselTrack not found."); return; }
+            carouselTrackElement.innerHTML = ''; 
+            let itemsHTML = '', validItemCount = 0;
             filenames.forEach(filename => {
                 const memberData = parseFilename(filename);
                 if (memberData) {
-                    // MODIFIED: HTML structure for tooltip inside name element
                     itemsHTML += `
                         <div class="member-carousel-item">
-                            <div class="carousel-image-wrapper">
-                                <img src="member/${encodeURIComponent(memberData.actualFilename)}" alt="${memberData.name}" 
-                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/120/FF0000/FFFFFF?text=Error'; this.parentElement.style.borderColor='red';">
-                            </div>
-                            <div class="carousel-member-name">
-                                ${memberData.name}
-                                <div class="carousel-member-quote-tooltip">"${memberData.quote}"</div>
-                            </div>
-                        </div>
-                    `;
+                            <div class="carousel-image-wrapper"><img src="member/${encodeURIComponent(memberData.actualFilename)}" alt="${memberData.name}" onerror="this.onerror=null; this.src='https://via.placeholder.com/120/FF0000/FFFFFF?text=Error';"></div>
+                            <div class="carousel-member-name">${memberData.name}<div class="carousel-member-quote-tooltip">"${memberData.quote}"</div></div>
+                        </div>`;
                     validItemCount++;
                 }
             });
-
             if (validItemCount > 0) { 
-                carouselTrack.innerHTML = itemsHTML + itemsHTML; 
-                
-                const itemWidth = 160; 
-                const itemMargin = 15; 
-                const effectiveItemWidth = itemWidth + (itemMargin * 2);
-                const totalWidthOriginalSet = validItemCount * effectiveItemWidth;
-                const animationDuration = Math.max(20, totalWidthOriginalSet / 70); 
-                carouselTrack.style.animationDuration = animationDuration + 's';
+                carouselTrackElement.innerHTML = itemsHTML + itemsHTML; 
+                const effectiveItemWidth = 160 + (15 * 2);
+                totalWidthOriginalSet = validItemCount * effectiveItemWidth; 
+                const animationDuration = Math.max(30, totalWidthOriginalSet / 50); 
+                carouselTrackElement.style.animationDuration = animationDuration + 's';
+                setupCarouselDrag();
             }
+        }
+
+        // =============================
+        // CAROUSEL DRAG LOGIC
+        // =============================
+        
+        function getVisualTranslateX(logicalTranslateX) {
+            if (totalWidthOriginalSet <= 0) return logicalTranslateX;
+            let visualX = logicalTranslateX % totalWidthOriginalSet;
+            // Correct the visualX to be in the range [-totalWidthOriginalSet, 0) for positive logicalX
+            // or keep it as is for negative logicalX (which is already in a repeating cycle)
+            if (logicalTranslateX > 0 && visualX !== 0) {
+                visualX -= totalWidthOriginalSet;
+            }
+            // If logicalTranslateX is a multiple of -totalWidthOriginalSet (e.g., -1000, -2000),
+            // visualX will be 0, which is correct for looping.
+            return visualX;
+        }
+
+
+        function setupCarouselDrag() {
+            if (!carouselTrackElement || !carouselTrackElement.parentElement) return;
+            carouselTrackElement.parentElement.addEventListener('mousedown', onCarouselPointerDown);
+            // Ensure passive is false for touchstart to allow preventDefault
+            carouselTrackElement.parentElement.addEventListener('touchstart', onCarouselPointerDown, { passive: false });
+        }
+
+        function onCarouselPointerDown(e) {
+            if (e.type === 'touchstart') {
+                e.preventDefault(); // Prevent default touch action (like scrolling)
+            }
+
+            isCarouselDragging = true;
+            carouselStartX = e.pageX || e.touches[0].pageX;
+            
+            const style = window.getComputedStyle(carouselTrackElement);
+            const matrix = new DOMMatrixReadOnly(style.transform);
+            carouselScrollStart = matrix.m41; // This is the visual translateX when drag starts.
+            
+            carouselCurrentLogicalTranslateX = carouselScrollStart; // Initialize logical to current visual
+
+            carouselTrackElement.style.animationPlayState = 'paused';
+            if (carouselAnimationId) cancelAnimationFrame(carouselAnimationId);
+
+            carouselLastX = carouselStartX;
+            carouselLastTimestamp = performance.now();
+            carouselVelocityX = 0;
+
+            document.addEventListener('mousemove', onCarouselPointerMove);
+            document.addEventListener('touchmove', onCarouselPointerMove, { passive: false });
+            document.addEventListener('mouseup', onCarouselPointerUp);
+            document.addEventListener('touchend', onCarouselPointerUp);
+            if (carouselTrackElement.parentElement) { 
+                carouselTrackElement.parentElement.addEventListener('mouseleave', onCarouselPointerUp);
+            }
+        }
+
+        function onCarouselPointerMove(e) {
+            if (!isCarouselDragging) return;
+            // No need for e.preventDefault() here for touchmove if touchstart already did it.
+            
+            const x = e.pageX || e.touches[0].pageX;
+            const walk = x - carouselStartX;
+            carouselCurrentLogicalTranslateX = carouselScrollStart + walk;
+
+            const now = performance.now();
+            const dx = x - carouselLastX;
+            const dt = now - carouselLastTimestamp;
+            if (dt > 0) carouselVelocityX = dx / dt;
+
+            carouselLastX = x;
+            carouselLastTimestamp = now;
+
+            const displayTranslateX = getVisualTranslateX(carouselCurrentLogicalTranslateX);
+            carouselTrackElement.style.transform = `translateX(${displayTranslateX}px)`;
+        }
+        
+        function onCarouselPointerUp(e) {
+            if (!isCarouselDragging) return;
+            isCarouselDragging = false;
+
+            document.removeEventListener('mousemove', onCarouselPointerMove);
+            document.removeEventListener('touchmove', onCarouselPointerMove);
+            document.removeEventListener('mouseup', onCarouselPointerUp);
+            document.removeEventListener('touchend', onCarouselPointerUp);
+            if (carouselTrackElement.parentElement) { 
+                carouselTrackElement.parentElement.removeEventListener('mouseleave', onCarouselPointerUp);
+            }
+
+            // The carouselCurrentLogicalTranslateX at this point is the *final unwrapped position* from the drag.
+            if (Math.abs(carouselVelocityX) > 0.2) { 
+                startCarouselInertia(); 
+            } else {
+                // If no inertia, directly normalize from the current logical position.
+                // The normalize function will convert this logical position to a final visual one.
+                normalizeCarouselPositionForAnimation();
+            }
+        }
+        
+        function startCarouselInertia() {
+            const friction = 0.95; 
+            const minVelocity = 0.1;
+            // Start inertia from the current logical (unwrapped) position.
+            let currentInertiaLogicalX = carouselCurrentLogicalTranslateX;
+
+            function step() {
+                if (isCarouselDragging) {
+                     if (carouselAnimationId) cancelAnimationFrame(carouselAnimationId);
+                     return;
+                }
+                
+                currentInertiaLogicalX += carouselVelocityX * 16; 
+                carouselVelocityX *= friction;
+                
+                const displayTranslateX = getVisualTranslateX(currentInertiaLogicalX);
+                carouselTrackElement.style.transform = `translateX(${displayTranslateX}px)`;
+
+                if (Math.abs(carouselVelocityX) > minVelocity) {
+                    carouselAnimationId = requestAnimationFrame(step);
+                } else {
+                    carouselVelocityX = 0;
+                    // After inertia, the final logical position is where inertia stopped.
+                    carouselCurrentLogicalTranslateX = currentInertiaLogicalX; 
+                    normalizeCarouselPositionForAnimation(); 
+                }
+            }
+            carouselAnimationId = requestAnimationFrame(step);
+        }
+
+        function normalizeCarouselPositionForAnimation() {
+            // Takes the final carouselCurrentLogicalTranslateX (which could be unwrapped from drag or inertia)
+            // and converts it to a final *visual* position for CSS animation.
+            let finalVisualX = getVisualTranslateX(carouselCurrentLogicalTranslateX);
+
+            // If the final visual position is exactly -totalWidthOriginalSet,
+            // it's visually the same as 0 for the start of a new CSS animation loop.
+            if (totalWidthOriginalSet > 0 && Math.abs(finalVisualX + totalWidthOriginalSet) < 0.1) { // Use a small epsilon for float comparison
+                finalVisualX = 0;
+            }
+
+            carouselTrackElement.style.transform = `translateX(${finalVisualX}px)`;
+            // Update the main logicalTranslateX to this final *visual* (wrapped) state.
+            // This is important so that the next drag starts its calculation from this clean visual state.
+            carouselCurrentLogicalTranslateX = finalVisualX; 
+            carouselTrackElement.style.animationPlayState = 'running';
         }
 
 
         // =============================
-        // SETUP FILTERS
+        // SETUP FILTERS 
         // =============================
         function setupFilterButtons() {
             const filterButtons = document.querySelectorAll('[data-filter]');
             const memberGrid = document.getElementById('memberGrid');
-
             filterButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     filterButtons.forEach(btn => btn.classList.remove('active'));
                     button.classList.add('active');
-                    
                     const filterValue = button.getAttribute('data-filter');
                     const memberCards = memberGrid.querySelectorAll('.member-card'); 
-
                     memberCards.forEach(card => {
-                        card.style.opacity = '0';
-                        card.style.transform = 'translateY(20px) rotateX(-5deg)';
-                        
+                        card.style.opacity = '0'; card.style.transform = 'translateY(20px) rotateX(-5deg)';
                         setTimeout(() => {
                             const cardCategory = card.getAttribute('data-category');
                             if (filterValue === 'all' || cardCategory === filterValue) {
                                 card.style.display = 'block';
-                                requestAnimationFrame(() => { 
-                                    card.style.opacity = '1';
-                                    card.style.transform = 'translateY(0px) rotateX(0deg)';
-                                });
-                            } else {
-                                card.style.display = 'none';
-                            }
+                                requestAnimationFrame(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0px) rotateX(0deg)'; });
+                            } else { card.style.display = 'none'; }
                         }, 250); 
                     });
                 });
             });
-            
             if (filterButtons.length > 0) {
-                const hasMemberCards = memberGrid && memberGrid.querySelector('.member-card');
-                if (hasMemberCards) {
-                    filterButtons[0].classList.add('active');
-                } else if (Array.isArray(configuredMemberFilenames) && configuredMemberFilenames.length > 0 && !memberGrid.querySelector('.col-span-full')) {
+                const hasCards = memberGrid && memberGrid.querySelector('.member-card');
+                if (hasCards || (Array.isArray(configuredMemberFilenames) && configuredMemberFilenames.length > 0 && !memberGrid.querySelector('.col-span-full'))) {
                     filterButtons[0].classList.add('active');
                 }
             }
@@ -685,41 +822,27 @@
         // =============================
         // EXTRA ANIMATIONS & EFFECTS
         // =============================
-        
         const cursorGlow = document.querySelector('.custom-cursor-glow');
         if (cursorGlow) {
-            document.addEventListener('mousemove', (e) => {
-                cursorGlow.style.left = e.clientX + 'px';
-                cursorGlow.style.top = e.clientY + 'px';
-            });
+            document.addEventListener('mousemove', (e) => { cursorGlow.style.left = e.clientX + 'px'; cursorGlow.style.top = e.clientY + 'px'; });
             document.addEventListener('mouseover', (e) => {
-                if (e.target.closest('button, a, .member-card, .member-carousel-item')) {
-                    cursorGlow.classList.add('interactive');
-                } else {
-                    cursorGlow.classList.remove('interactive');
-                }
+                cursorGlow.classList.toggle('interactive', !!e.target.closest('button, a, .member-card, .member-carousel-item, #musicPlayer input, #musicPlayer button'));
             });
         }
 
-
         function add3DTiltEffect(element) {
             const maxTilt = 8; 
-
             element.addEventListener('mousemove', (e) => {
+                if (isCarouselDragging) return; 
                 const rect = element.getBoundingClientRect();
                 const x = e.clientX - rect.left - rect.width / 2;
                 const y = e.clientY - rect.top - rect.height / 2;
-
                 const tiltX = (y / (rect.height / 2)) * -maxTilt;
                 const tiltY = (x / (rect.width / 2)) * maxTilt;
-                
                 element.style.setProperty('--dynamic-rotate-x', `${tiltX}deg`);
                 element.style.setProperty('--dynamic-rotate-y', `${tiltY}deg`);
             });
-            element.addEventListener('mouseleave', () => {
-                element.style.setProperty('--dynamic-rotate-x', `0deg`);
-                element.style.setProperty('--dynamic-rotate-y', `0deg`);
-            });
+            element.addEventListener('mouseleave', () => { element.style.setProperty('--dynamic-rotate-x', `0deg`); element.style.setProperty('--dynamic-rotate-y', `0deg`); });
         }
 
         function createDataStreams() {
@@ -738,31 +861,46 @@
         }
 
         // =============================
+        // MUSIC PLAYER LOGIC
+        // =============================
+        function setupMusicPlayer() {
+            const audio = document.getElementById('backgroundMusic');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const volumeSlider = document.getElementById('volumeSlider');
+            const playIcon = playPauseBtn.innerHTML; 
+            const pauseIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pause-fill inline-block" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>`;
+            function updateVolumeSliderFill() {
+                const percentage = (volumeSlider.value - volumeSlider.min) / (volumeSlider.max - volumeSlider.min) * 100;
+                const glowBlue = getComputedStyle(document.documentElement).getPropertyValue('--glow-color-blue').trim() || 'rgba(66, 220, 255, 0.9)';
+                volumeSlider.style.background = `linear-gradient(to right, ${glowBlue} ${percentage}%, rgba(86, 142, 255, 0.2) ${percentage}%)`;
+            }
+            audio.volume = volumeSlider.value; updateVolumeSliderFill(); 
+            playPauseBtn.addEventListener('click', () => {
+                if (audio.paused) { audio.play().catch(console.error); } else { audio.pause(); }
+            });
+            volumeSlider.addEventListener('input', () => { audio.volume = volumeSlider.value; updateVolumeSliderFill(); });
+            audio.onpause = () => { playPauseBtn.innerHTML = playIcon; };
+            audio.onplay = () => { playPauseBtn.innerHTML = pauseIcon; };
+        }
+
+        // =============================
         // INITIALIZATION
         // =============================
         document.addEventListener('DOMContentLoaded', function() {
             const memberGrid = document.getElementById('memberGrid');
             if (!memberGrid) {
-                console.error("嚴重錯誤: 找不到成員網格容器 'memberGrid'。應用程式無法初始化。");
-                document.body.innerHTML = '<div style="color: red; font-size: 24px; text-align: center; padding: 50px; font-family: sans-serif;">嚴重錯誤: 找不到成員網格容器 \'memberGrid\'。<br>頁面無法正確載入。請檢查 HTML 結構。</div>';
+                document.body.innerHTML = '<div style="color:red;font-size:24px;text-align:center;padding:50px;">CRITICAL ERROR: memberGrid not found.</div>';
                 return;
             }
-
-            if (typeof configuredMemberFilenames === 'undefined') {
-                console.error("設定錯誤: configuredMemberFilenames 陣列未定義。");
-                memberGrid.innerHTML = '<p class="text-center text-red-400 col-span-full orbitron py-8">設定錯誤: <code>configuredMemberFilenames</code> 陣列未定義。<br>請檢查 JavaScript 程式碼。</p>';
+            if (typeof configuredMemberFilenames === 'undefined' || !Array.isArray(configuredMemberFilenames)) {
+                memberGrid.innerHTML = '<p class="text-center text-red-400 col-span-full orbitron py-8">Configuration error: configuredMemberFilenames is invalid.</p>';
                 return;
             }
-             if (!Array.isArray(configuredMemberFilenames)) {
-                console.error("設定錯誤: configuredMemberFilenames 不是一個陣列。");
-                memberGrid.innerHTML = '<p class="text-center text-red-400 col-span-full orbitron py-8">設定錯誤: <code>configuredMemberFilenames</code> 不是一個有效的陣列。<br>請檢查 JavaScript 程式碼。</p>';
-                return;
-            }
-            
             populateMemberGrid(configuredMemberFilenames);
-            populateMemberCarousel(configuredMemberFilenames);
+            populateMemberCarousel(configuredMemberFilenames); 
             setupFilterButtons();
             createDataStreams();
+            setupMusicPlayer();
         });
     </script>
 </body>
